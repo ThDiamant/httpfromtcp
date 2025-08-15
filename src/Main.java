@@ -1,4 +1,7 @@
 import java.io.*;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -6,8 +9,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import static java.lang.System.exit;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Main {
 
     public static final String NO_MORE_MESSAGES = UUID.randomUUID().toString();
@@ -15,26 +16,46 @@ public class Main {
     private static final int BUFFER_SIZE = 8;
 
     public static void main(String[] args) {
-        File inputFile = new File("data/messages.txt");
-
         try {
-            DataInputStream inputStream = getInputStreamFromFile(inputFile);
-            BlockingQueue<String> inputQueue = getLinesQueue(inputStream);
+            ServerSocket serverSocket = setUpServerSocket();
 
             while(true) {
-                String readValue = inputQueue.take();
-                if (readValue.equals(NO_MORE_MESSAGES)) {
-                    break;
-                }
-                System.out.printf("read: %s\n", readValue);
-            }
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("A connection has been accepted.");
 
-            exit(0);
-        } catch (FileNotFoundException e) {
-            System.out.println("File not found: " + e);
-            throw new RuntimeException(e);
+                DataInputStream clientInputStream = getInputStreamFromSocket(clientSocket);
+                BlockingQueue<String> inputQueue = getLinesQueue(clientInputStream);
+
+                printQueueMessages(inputQueue);
+
+                clientSocket.close();
+                System.out.println("Connection has been closed.");
+            }
         } catch (InterruptedException e) {
             System.out.println("Error while reading from queue: " + e);
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void printQueueMessages(BlockingQueue<String> queue) throws InterruptedException {
+        String readValue = queue.take();
+        while(!(readValue.equals(NO_MORE_MESSAGES))) {
+            System.out.printf("read: %s\n", readValue);
+            readValue = queue.take();
+        }
+    }
+
+    private static ServerSocket setUpServerSocket()
+    {
+        try {
+            ServerSocket serverSocket = new ServerSocket();
+            InetSocketAddress socketInetAddress = new InetSocketAddress("127.0.0.1", 42069);
+            serverSocket.bind(socketInetAddress);
+
+            return serverSocket;
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
@@ -42,6 +63,12 @@ public class Main {
     private static DataInputStream getInputStreamFromFile(File inputFile) throws FileNotFoundException {
         FileInputStream fileInputStream = new FileInputStream(inputFile);
         return new DataInputStream(fileInputStream);
+
+    }
+
+    private static DataInputStream getInputStreamFromSocket(Socket socket) throws IOException {
+        InputStream clientInputStream = socket.getInputStream();
+        return new DataInputStream(clientInputStream);
 
     }
 
